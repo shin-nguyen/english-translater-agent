@@ -1,0 +1,38 @@
+spring:
+  application:
+    name: translator
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+server:
+  port: ${SERVER_PORT:8080}
+
+translation:
+  provider: ${TRANSLATION_PROVIDER:openrouter}
+
+anthropic:
+  api-key: ${ANTHROPIC_API_KEY:}
+  model: ${ANTHROPIC_MODEL:claude-sonnet-5}
+  base-url: ${ANTHROPIC_BASE_URL:https://api.anthropic.com}
+  api-version: "2023-06-01"
+  timeout-seconds: ${ANTHROPIC_TIMEOUT_SECONDS:20}
+  max-tokens: ${ANTHROPIC_MAX_TOKENS:1536}
+
+openrouter:
+  api-key: ${OPENROUTER_API_KEY:}
+  model: ${OPENROUTER_MODEL:openai/gpt-oss-20b:free}
+  base-url: ${OPENROUTER_BASE_URL:https://openrouter.ai/api/v1}
+  timeout-seconds: ${OPENROUTER_TIMEOUT_SECONDS:20}
+  max-tokens: ${OPENROUTER_MAX_TOKENS:1536}
+  site-url: ${OPENROUTER_SITE_URL:}
+  app-name: ${OPENROUTER_APP_NAME:EN Translator for IT}
