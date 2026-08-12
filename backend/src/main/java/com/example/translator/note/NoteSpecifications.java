@@ -7,6 +7,11 @@ public class NoteSpecifications {
     private NoteSpecifications() {
     }
 
+    /** Unlike the other specs here, this one is never optional — every note query must be scoped to the caller. */
+    public static Specification<Note> belongsToUser(Long userId) {
+        return (root, query, cb) -> cb.equal(root.get("user").get("id"), userId);
+    }
+
     public static Specification<Note> hasRole(Long roleId) {
         return (root, query, cb) -> roleId == null ? null : cb.equal(root.get("role").get("id"), roleId);
     }

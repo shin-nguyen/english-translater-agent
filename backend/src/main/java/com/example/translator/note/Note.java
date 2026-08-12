@@ -2,6 +2,7 @@ package com.example.translator.note;
 
 import com.example.translator.context.Context;
 import com.example.translator.role.Role;
+import com.example.translator.user.AppUser;
 import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -45,6 +46,10 @@ public class Note {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "context_id")
     private Context context;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "user_id", nullable = false)
+    private AppUser user;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -133,6 +138,14 @@ public class Note {
 
     public void setContext(Context context) {
         this.context = context;
+    }
+
+    public AppUser getUser() {
+        return user;
+    }
+
+    public void setUser(AppUser user) {
+        this.user = user;
     }
 
     public Instant getCreatedAt() {

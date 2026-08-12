@@ -1,29 +1,29 @@
 package com.example.translator.config;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.web.servlet.config.annotation.CorsRegistry;
-import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import java.util.Arrays;
+import java.util.List;
 
 @Configuration
-public class CorsConfig implements WebMvcConfigurer {
+public class CorsConfig {
 
-    private final String[] allowedOrigins;
-
-    public CorsConfig(@Value("${app.cors.allowed-origins:}") String allowedOrigins) {
-        this.allowedOrigins = allowedOrigins.isBlank()
-                ? new String[0]
-                : allowedOrigins.split(",");
-    }
-
-    @Override
-    public void addCorsMappings(CorsRegistry registry) {
-        if (allowedOrigins.length == 0) {
-            return;
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource(@Value("${app.cors.allowed-origins:}") String allowedOrigins) {
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        CorsConfiguration config = new CorsConfiguration();
+        if (!allowedOrigins.isBlank()) {
+            config.setAllowedOrigins(Arrays.asList(allowedOrigins.split(",")));
         }
-        registry.addMapping("/api/**")
-                .allowedOrigins(allowedOrigins)
-                .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
-                .allowedHeaders("*");
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        config.setAllowedHeaders(List.of("*"));
+        config.setAllowCredentials(false);
+        source.registerCorsConfiguration("/api/**", config);
+        return source;
     }
 }

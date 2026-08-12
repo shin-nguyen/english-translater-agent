@@ -1,31 +1,23 @@
 package com.example.translator.translation;
 
+import com.example.translator.aimodel.AiModelConfig;
+import com.example.translator.aimodel.AiModelConfigService;
 import com.example.translator.common.AiServiceException;
-import com.example.translator.config.OpenRouterProperties;
 import com.example.translator.context.Context;
 import com.example.translator.context.ContextRepository;
 import com.example.translator.role.Role;
 import com.example.translator.role.RoleRepository;
-import com.example.translator.translation.OpenRouterApiModels.ChatCompletionRequest;
-import com.example.translator.translation.OpenRouterApiModels.ChatCompletionResponse;
-import com.example.translator.translation.OpenRouterApiModels.ChatMessage;
 import com.example.translator.translation.TranslationDtos.TranslateRequest;
 import com.example.translator.translation.TranslationDtos.TranslateResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestClient;
-import org.springframework.web.client.RestClientException;
-
-import java.util.List;
 
 @Service
-@ConditionalOnProperty(prefix = "translation", name = "provider", havingValue = "openrouter")
-public class OpenRouterTranslationServiceImpl implements TranslationService {
+public class TranslationServiceImpl implements TranslationService {
 
-    private static final Logger log = LoggerFactory.getLogger(OpenRouterTranslationServiceImpl.class);
+    private static final Logger log = LoggerFactory.getLogger(TranslationServiceImpl.class);
     private static final String UNSPECIFIED = "Không chỉ định (chung chung, không có vai trò/ngữ cảnh cụ thể)";
 
     private static final String SYSTEM_PROMPT_TEMPLATE = """
@@ -80,22 +72,22 @@ public class OpenRouterTranslationServiceImpl implements TranslationService {
             markdown, hay lời giải thích nào khác bao quanh nó.
             """;
 
-    private final RestClient openRouterRestClient;
-    private final OpenRouterProperties properties;
     private final RoleRepository roleRepository;
     private final ContextRepository contextRepository;
     private final ObjectMapper objectMapper;
+    private final AiModelConfigService aiModelConfigService;
+    private final AiProviderClientRegistry registry;
 
-    public OpenRouterTranslationServiceImpl(RestClient openRouterRestClient,
-                                             OpenRouterProperties properties,
-                                             RoleRepository roleRepository,
-                                             ContextRepository contextRepository,
-                                             ObjectMapper objectMapper) {
-        this.openRouterRestClient = openRouterRestClient;
-        this.properties = properties;
+    public TranslationServiceImpl(RoleRepository roleRepository,
+                                   ContextRepository contextRepository,
+                                   ObjectMapper objectMapper,
+                                   AiModelConfigService aiModelConfigService,
+                                   AiProviderClientRegistry registry) {
         this.roleRepository = roleRepository;
         this.contextRepository = contextRepository;
         this.objectMapper = objectMapper;
+        this.aiModelConfigService = aiModelConfigService;
+        this.registry = registry;
     }
 
     @Override
@@ -105,12 +97,15 @@ public class OpenRouterTranslationServiceImpl implements TranslationService {
 
         String systemPrompt = buildSystemPrompt(role, context);
 
-        String rawResponse = callOpenRouter(systemPrompt, request.text());
+        AiModelConfig config = aiModelConfigService.getEnabledForDispatch(request.modelConfigId());
+        AiProviderClient client = registry.get(config.getProvider());
+
+        String rawResponse = client.callModel(config, systemPrompt, request.text());
         try {
             return parseResponse(rawResponse);
         } catch (RuntimeException firstFailure) {
             log.warn("AI response failed JSON parsing, retrying once with stricter instructions: {}", firstFailure.getMessage());
-            String retryResponse = callOpenRouter(systemPrompt + RETRY_SUFFIX, request.text());
+            String retryResponse = client.callModel(config, systemPrompt + RETRY_SUFFIX, request.text());
             try {
                 return parseResponse(retryResponse);
             } catch (RuntimeException secondFailure) {
@@ -132,32 +127,6 @@ public class OpenRouterTranslationServiceImpl implements TranslationService {
             return name == null || name.isBlank() ? UNSPECIFIED : name;
         }
         return (name == null || name.isBlank() ? "" : name + " — ") + description;
-    }
-
-    private String callOpenRouter(String systemPrompt, String userText) {
-        ChatCompletionRequest body = new ChatCompletionRequest(
-                properties.getModel(),
-                properties.getMaxTokens(),
-                List.of(new ChatMessage("system", systemPrompt), new ChatMessage("user", userText))
-        );
-
-        ChatCompletionResponse response;
-        try {
-            response = openRouterRestClient.post()
-                    .uri("/chat/completions")
-                    .body(body)
-                    .retrieve()
-                    .body(ChatCompletionResponse.class);
-        } catch (RestClientException e) {
-            throw new AiServiceException("Không thể kết nối tới dịch vụ AI: " + e.getMessage(), e);
-        }
-
-        if (response == null || response.choices() == null || response.choices().isEmpty()
-                || response.choices().get(0).message() == null
-                || response.choices().get(0).message().content() == null) {
-            throw new AiServiceException("Dịch vụ AI trả về phản hồi rỗng.");
-        }
-        return response.choices().get(0).message().content();
     }
 
     TranslateResponse parseResponse(String raw) {

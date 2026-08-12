@@ -7,6 +7,9 @@ spring:
 app:
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:}
+  security:
+    jwt-secret: ${APP_JWT_SECRET}
+    ai-key-encryption-key: ${AI_MODEL_ENCRYPTION_KEY}
 
 logging:
   level:

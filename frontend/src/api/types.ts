@@ -40,6 +40,7 @@ export interface TranslateRequest {
   text: string
   roleId: number | null
   contextId: number | null
+  modelConfigId: number | null
 }
 
 export interface TranslateResponse {
@@ -95,4 +96,81 @@ export interface Page<T> {
   size: number
   first: boolean
   last: boolean
+}
+
+export type AppRole = 'ADMIN' | 'USER'
+
+export interface UserSummary {
+  id: number
+  email: string
+  displayName: string
+  appRole: AppRole
+  enabled: boolean
+  createdAt: string
+}
+
+export interface AuthResponse {
+  token: string
+  user: UserSummary
+}
+
+export interface SignupRequest {
+  email: string
+  password: string
+  displayName: string
+}
+
+export interface LoginRequest {
+  email: string
+  password: string
+}
+
+export interface ChangePasswordRequest {
+  currentPassword: string
+  newPassword: string
+}
+
+export interface AdminCreateUserRequest {
+  email: string
+  password: string
+  displayName: string
+  appRole: AppRole
+}
+
+export type AiProviderType = 'ANTHROPIC' | 'OPENAI_COMPATIBLE'
+
+export interface AiModelConfigAdmin {
+  id: number
+  label: string
+  provider: AiProviderType
+  baseUrl: string
+  modelIdentifier: string
+  apiVersion: string | null
+  maxTokens: number
+  timeoutSeconds: number
+  enabled: boolean
+  isDefault: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface AiModelConfigCreateRequest {
+  label: string
+  provider: AiProviderType
+  baseUrl: string
+  apiKey: string
+  modelIdentifier: string
+  apiVersion: string | null
+  maxTokens: number
+  timeoutSeconds: number
+  enabled: boolean
+  isDefault: boolean
+}
+
+// apiKey blank/omitted means "keep the existing stored key unchanged"
+export type AiModelConfigUpdateRequest = AiModelConfigCreateRequest
+
+export interface AiModelOption {
+  id: number
+  label: string
 }

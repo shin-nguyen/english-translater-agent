@@ -6,12 +6,13 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 
 /**
- * Wire models for OpenRouter's OpenAI-compatible Chat Completions API (POST /chat/completions).
+ * Wire models for the OpenAI-compatible Chat Completions API (POST /chat/completions), used by
+ * OpenRouter, self-hosted vLLM/llama.cpp/Ollama servers, and any other OpenAI-compatible host.
  * Intentionally decoupled from {@link TranslationDtos}, our own API's response shape.
  */
-public class OpenRouterApiModels {
+public class OpenAiApiModels {
 
-    private OpenRouterApiModels() {
+    private OpenAiApiModels() {
     }
 
     public record ChatCompletionRequest(

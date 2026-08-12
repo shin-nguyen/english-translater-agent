@@ -1,6 +1,7 @@
 package com.example.translator.translation;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 import java.util.List;
@@ -15,7 +16,9 @@ public class TranslationDtos {
             @Size(max = 2000, message = "text must be at most 2000 characters")
             String text,
             Long roleId,
-            Long contextId
+            Long contextId,
+            @NotNull(message = "modelConfigId is required")
+            Long modelConfigId
     ) {
     }
 

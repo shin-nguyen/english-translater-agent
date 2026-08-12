@@ -4,8 +4,9 @@ import { rolesApi } from '../api/roles'
 import { contextsApi } from '../api/contexts'
 import { translateApi } from '../api/translate'
 import { notesApi } from '../api/notes'
+import { aiModelsApi } from '../api/aiModels'
 import { ApiError } from '../api/client'
-import type { Context, DetectedLanguage, Role, TranslateResponse } from '../api/types'
+import type { AiModelOption, Context, DetectedLanguage, Role, TranslateResponse } from '../api/types'
 import { RoleContextSelect } from '../components/RoleContextSelect'
 import { Spinner } from '../components/Spinner'
 import { Badge } from '../components/Badge'
@@ -34,8 +35,10 @@ export function TranslatePage() {
 
   const [roles, setRoles] = useState<Role[]>([])
   const [contexts, setContexts] = useState<Context[]>([])
+  const [models, setModels] = useState<AiModelOption[]>([])
   const [roleId, setRoleId] = useState<number | null>(null)
   const [contextId, setContextId] = useState<number | null>(null)
+  const [modelConfigId, setModelConfigId] = useState<number | null>(null)
   const [text, setText] = useState('')
 
   const [loading, setLoading] = useState(false)
@@ -48,6 +51,10 @@ export function TranslatePage() {
   useEffect(() => {
     rolesApi.list().then(setRoles).catch(() => showToast('Could not load roles', 'error'))
     contextsApi.list().then(setContexts).catch(() => showToast('Could not load contexts', 'error'))
+    aiModelsApi
+      .listEnabled()
+      .then(setModels)
+      .catch(() => showToast('Could not load AI models', 'error'))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -57,10 +64,14 @@ export function TranslatePage() {
       showToast('Please enter some text first', 'error')
       return
     }
+    if (!modelConfigId) {
+      showToast('Please select an AI model first', 'error')
+      return
+    }
     setLoading(true)
     setSaved(false)
     try {
-      const response = await translateApi.translate({ text: trimmed, roleId, contextId })
+      const response = await translateApi.translate({ text: trimmed, roleId, contextId, modelConfigId })
       setResult(response)
       setTitle(response.suggestedTitle)
     } catch (err) {
@@ -105,10 +116,23 @@ export function TranslatePage() {
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6">
       <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900 sm:p-6">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <RoleContextSelect label="Role" value={roleId} options={roles} onChange={setRoleId} />
           <RoleContextSelect label="Context" value={contextId} options={contexts} onChange={setContextId} />
+          <RoleContextSelect
+            label="AI Model"
+            value={modelConfigId}
+            options={models.map((m) => ({ id: m.id, name: m.label }))}
+            onChange={setModelConfigId}
+            placeholder="Select a model..."
+          />
         </div>
+
+        {models.length === 0 && (
+          <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
+            No AI models configured yet — ask an admin to add one in AI Models.
+          </p>
+        )}
 
         <div className="mt-4">
           <textarea
@@ -125,7 +149,7 @@ export function TranslatePage() {
 
         <button
           onClick={handleTranslate}
-          disabled={loading || !text.trim()}
+          disabled={loading || !text.trim() || !modelConfigId}
           className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {loading ? <Spinner className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}

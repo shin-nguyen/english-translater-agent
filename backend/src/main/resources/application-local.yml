@@ -7,6 +7,10 @@ spring:
 app:
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
+  security:
+    # DEV ONLY — do not reuse these values outside local development.
+    jwt-secret: ${APP_JWT_SECRET:local-dev-only-jwt-secret-not-for-prod-use-32bytes!}
+    ai-key-encryption-key: ${AI_MODEL_ENCRYPTION_KEY:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}
 
 logging:
   level:
