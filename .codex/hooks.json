@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .codex/hooks/block_secrets.py",
+            "command": "python .codex/hooks/block_secrets.py",
             "timeout": 10,
             "statusMessage": "Checking command against .env-file policy"
           }
@@ -19,7 +19,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .codex/hooks/audit_log.py",
+            "command": "python .codex/hooks/audit_log.py",
             "timeout": 10,
             "statusMessage": "Writing audit log entry",
             "async": true

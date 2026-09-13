@@ -1,130 +1,39 @@
-# Pre-work — set up your machine before Session 2
+# Pre-work — build the MCP / Skill / Subagent / Hooks demo kit from scratch
 
-Do this **before** the session, on your own time (~15–20 minutes). Nothing
-here depends on the workshop repo's content — it's generic Codex CLI setup
-plus getting one local database running. If you get stuck, the
-Troubleshooting section at the bottom covers the most common blockers; if
-you're still stuck, message the organizer before the day, not during it.
+Do this **before** the session (~30–40 minutes). This is not a Codex CLI
+install guide (see §0 if you genuinely don't have `codex` yet) — it's a
+hands-on build: starting from a plain `main` checkout, which has **none**
+of this repo's Codex configuration (verified — `main` has no `.codex/`, no
+`.agents/`, not even `AGENTS.md`), you'll write every file yourself: the
+MCP server config, a Skill, a Subagent role, two Hooks, and an exec-policy
+rules file. By the end you'll have the exact setup demos `02`–`05` walk
+through, and — because you typed it — you'll actually know what each line
+does instead of just turning something on.
 
-You'll end the pre-work with: Codex CLI installed and logged in, Docker
-running, and the demo repo cloned with a local Postgres already seeded — so
-Session 2 itself starts straight at the demos (`01-overview.md` onward),
-not at installers.
+If you'd rather skip the typing and just use a checkout that already has
+all of this (e.g. the `session2-codex-demo` branch), you don't need this
+file — just trust the project (§2) and jump to `01-overview.md`. Everything
+below assumes you're building it up yourself on top of `main`.
 
-## 0. What you need
+## 0. If you don't have Codex CLI yet
 
-- A laptop you can install software on (admin/sudo rights).
-- Either a ChatGPT account with Codex access (Plus, Team, Enterprise, or an
-  org that's enabled it), **or** an OpenAI API key. Either works — see
-  step 2. If you're not sure which your organization uses, ask before the
-  session; don't spend the pre-work window guessing.
-- About 1 GB of free disk space (Docker image + npm packages).
+- `node`, `npm`, `git`, `docker`, `docker compose` on your PATH.
+- **Windows:** do all of this inside **WSL2**, not PowerShell/cmd —
+  `wsl --install` from an elevated PowerShell, reboot, enable Docker
+  Desktop's WSL integration for your distro. The `docker compose exec` /
+  heredoc commands below assume a POSIX shell.
+- Then:
+  ```bash
+  npm install -g @openai/codex
+  codex login        # or: codex login --api-key "sk-..."
+  codex --version     # this kit was written/verified against 0.154.0
+  ```
 
-## 1. Install prerequisites
+## 1. Clone `main` and bring up the app's own dependencies
 
-Pick your OS. The end state either way: a working `node`, `npm`, `git`,
-`docker`, and `docker compose` on the command line.
-
-### macOS
-
-```bash
-# Homebrew, if you don't have it: https://brew.sh
-brew install node@20 git
-brew install --cask docker   # then open Docker.app once so it finishes setup
-```
-`git` usually already ships with macOS (Xcode Command Line Tools) — `brew
-install git` is harmless if you already have one.
-
-### Windows
-
-Codex CLI (and this repo's `docker compose`/`psql` steps) expect a
-Linux-like shell — **use WSL2**, not raw PowerShell/cmd:
-
-1. In an elevated PowerShell: `wsl --install` (installs WSL2 + Ubuntu),
-   then reboot if asked.
-2. Open the "Ubuntu" app from the Start menu once to finish first-time
-   setup (pick a Linux username/password — separate from your Windows
-   login).
-3. Install [Docker Desktop for Windows](https://www.docker.com/products/docker-desktop/),
-   then in Docker Desktop → Settings → Resources → WSL Integration, enable
-   integration for your Ubuntu distro.
-4. From here on, do **every** command in this pre-work (and in the demos)
-   inside the Ubuntu/WSL2 terminal, not PowerShell. Inside that Ubuntu
-   shell:
-   ```bash
-   sudo apt update && sudo apt install -y nodejs npm git
-   node --version   # if this is older than 18, see the nvm note below
-   ```
-
-### Linux
-
-```bash
-# Debian/Ubuntu
-sudo apt update && sudo apt install -y git
-# Docker Engine + Compose plugin: follow https://docs.docker.com/engine/install/
-# (the distro's own docker.io package is often an old version — prefer Docker's own repo)
-sudo usermod -aG docker "$USER"   # then log out/in once so it takes effect
-```
-For Node, any distro: prefer [nvm](https://github.com/nvm-sh/nvm) over an
-old distro package:
-```bash
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
-# open a new shell, then:
-nvm install 20
-```
-
-### Verify, whichever OS
-
-```bash
-node --version     # v18+ (v20+ preferred)
-npm --version
-git --version
-docker --version
-docker compose version
-```
-If any of these error instead of printing a version, stop and fix that one
-before moving on — everything below assumes all four work.
-
-## 2. Install Codex CLI
-
-```bash
-npm install -g @openai/codex
-codex --version
-```
-This kit was written and verified against **0.154.0**. If you get a much
-newer version and something in the demos behaves differently, that's a
-real signal, not necessarily a mistake — flag it to the group, it might
-become a discussion point in `05-demo-putting-together.md` about the
-project moving fast.
-
-## 3. Log in
-
-Two ways — use whichever matches how your organization gives you Codex
-access. If you don't know, try (a) first; it's the simpler path.
-
-**(a) ChatGPT login** (Plus / Team / Enterprise / Business seat with Codex):
-```bash
-codex login
-```
-This opens a browser to sign in with your ChatGPT account and hands a
-token back to the CLI. No key to copy/paste.
-
-**(b) API key** (you have, or your org gives you, an OpenAI API key):
-```bash
-codex login --api-key "sk-..."
-```
-or set it as an environment variable before running `codex` (check
-`codex login --help` for the exact accepted env var name on your installed
-version, since this has changed across releases).
-
-**Verify either way:**
-```bash
-codex doctor
-```
-Look at the `auth` line under "Notes" — it should NOT say "no Codex
-credentials were found." If it does, login didn't take; re-run step 3.
-
-## 4. Get the demo repo running locally
+None of what follows is Codex-specific yet — it's just getting the app
+itself runnable, because the MCP server you'll configure in §3 needs a real
+Postgres with real data to query.
 
 ```bash
 git clone https://github.com/shin-nguyen/english-translater-agent.git
@@ -132,8 +41,9 @@ cd english-translater-agent
 cp .env.example .env
 ```
 
-Fill in the two required secrets in `.env` (throwaway local values — never
-reuse real secrets here):
+Generate the two local secrets (throwaway values — never reuse real
+secrets here; you'll deliberately try to leak these in Demo 4, so they need
+to be real strings, not blank):
 ```bash
 python3 - <<'PY'
 import secrets, base64, pathlib
@@ -144,77 +54,476 @@ t = t.replace("AI_MODEL_ENCRYPTION_KEY=", "AI_MODEL_ENCRYPTION_KEY=" + base64.b6
 p.write_text(t)
 PY
 ```
-(No `python3` handy? By hand: run `openssl rand -base64 32` twice and paste
-the two values into `.env` yourself.)
+(No `python3`? `openssl rand -base64 32` twice, paste both values in by
+hand.)
 
-Start just the database and load the real schema (the demos don't need the
-Java backend or React frontend running):
+Bring up Postgres and load the real schema (backend/frontend containers
+aren't needed for the demos):
 ```bash
 docker compose up -d postgres
-```
-Wait a few seconds for it to report healthy, then:
-```bash
+# wait a few seconds for it to report healthy, then:
 for f in backend/src/main/resources/db/migration/V*.sql; do
   docker compose exec -T postgres psql -U translator -d translator -f - < "$f"
 done
 ```
-(This runs `psql` *inside* the Postgres container via `docker compose
-exec`, so you don't need a local `psql` client installed at all — if you
-do have one locally and prefer it: `PGPASSWORD=translator psql -h
-localhost -U translator -d translator -f "$f"` works identically.)
 
-## 5. Trust the project in Codex
+## 2. Trust the project in Codex
 
 ```bash
 codex
 ```
-The first time Codex opens a folder it hasn't seen, it asks whether to
-trust it — say yes. Project-level config in this repo (`.codex/config.toml`,
-the exec-policy rules, the hooks) only takes effect once trusted. Exit
-(`Ctrl+D` or `/exit`) once you've confirmed the trust prompt.
+First time opening this folder, Codex asks to trust it — say yes, then
+exit (`Ctrl+D`). Do this now, before writing any config: project-level
+`.codex/config.toml`, `.codex/hooks.json`, and `.codex/rules/` only take
+effect in a trusted project, so it's one less variable while you're
+building and testing each piece below. (Re-trust is needed again if you
+re-clone or move machines.)
 
-## 6. Self-check — confirm you're actually ready
+## 3. Write the MCP server config
 
-Run each of these and compare against the expected result. Don't move on
-until all four are green; this is exactly what `01-overview.md` will ask
-you to re-confirm at the start of the session, so doing it now means
-Session 2 starts on time instead of everyone debugging installs together.
+MCP is just another tool source Codex can call — but it runs as its own
+process, outside Codex's sandbox (more on that in `02-demo-mcp.md`). You're
+pointing Codex at a read-only Postgres MCP server aimed at the app's own
+database.
+
+```bash
+mkdir -p .codex
+cat > .codex/config.toml <<'EOF'
+# Root-level keys MUST come before any [table] header — TOML gotcha: once a
+# [table] header appears, every following key belongs to THAT table, so
+# putting sandbox_mode/approval_policy after [agents] would silently make
+# them keys of [agents] instead, and Codex fails with something like
+# `invalid type: string "workspace-write", expected struct AgentRoleToml`.
+
+sandbox_mode = "workspace-write"
+approval_policy = "on-request"
+
+[sandbox_workspace_write]
+network_access = false
+
+# MCP server — a read-only Postgres tool pointed at the app's own DB.
+# Requires `docker compose up -d postgres` (done in §1).
+[mcp_servers.translator_db]
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-postgres", "postgresql://translator:translator@localhost:5432/translator"]
+startup_timeout_sec = 15
+tool_timeout_sec = 30
+enabled = true
+
+# Subagents — cap concurrency so a runaway fan-out can't happen live.
+# The secret_auditor role itself is NOT declared here — Codex auto-discovers
+# it from .codex/agents/secret-auditor.toml (§5), no [agents.secret_auditor]
+# entry needed.
+[agents]
+max_threads = 4
+max_depth = 1
+EOF
+```
+
+Verify (re-trust with `codex` once more if this is the first file you've
+added since §2, since new project config still needs a trusted project):
+```bash
+codex mcp list
+# expect: translator_db, Status: enabled
+codex mcp get translator_db
+# expect: command: npx, the startup/tool timeouts above
+```
+
+## 4. Write the Skill
+
+A Skill is reusable, triggered know-how for *this* repo — loaded only when
+relevant (Codex loads just the `name`+`description` frontmatter for every
+skill up front; the full body only once it's picked — "progressive
+disclosure"). This one encodes how this repo wants a new AI provider added.
+
+```bash
+mkdir -p .agents/skills/add-ai-provider
+cat > .agents/skills/add-ai-provider/SKILL.md <<'EOF'
+---
+name: add-ai-provider
+description: Use when asked to add support for a new AI/LLM provider (a new AiProviderClient) to the translator backend, following the existing Anthropic / OpenAI-compatible pattern.
+---
+
+# Add a new AI provider client
+
+This backend's AI integration is provider-agnostic by design:
+`com.example.translator.translation.AiProviderClient` is a small interface
+(`supports()` returns which `AiProviderType` it handles, `callModel(...)`
+makes the HTTP call); `AiProviderClientRegistry` collects every Spring bean
+that implements it into a `Map<AiProviderType, AiProviderClient>`; the two
+existing implementations are `AnthropicProviderClient` and
+`OpenAiCompatibleProviderClient`, all in
+`backend/src/main/java/com/example/translator/translation/`.
+
+Follow these steps, in order:
+
+1. Read `AiProviderClient.java`, `AiProviderClientRegistry.java`, and BOTH
+   existing implementations first. Do not start writing before you've seen
+   how the two existing clients build a request and map a response — the
+   new one should look like a sibling of those, not a novel design.
+2. Add the new provider to the `AiProviderType` enum in
+   `com.example.translator.aimodel.AiProviderType`.
+3. Create `<Provider>ProviderClient` in the same `translation` package,
+   implementing `AiProviderClient`. It only needs to be `@Component`-annotated
+   for the registry to pick it up automatically — there is no separate
+   registration step to remember.
+4. Build a fresh `RestClient` per call from the given `AiModelConfig`
+   (baseUrl/model/apiKey) exactly like the existing clients do — do not
+   cache a client across calls, so an admin editing the config takes effect
+   immediately.
+5. Never introduce a second place that stores or logs the raw API key.
+   `ApiKeyAttributeConverter` (in `com.example.translator.aimodel`) already
+   AES-256-GCM encrypts `AiModelConfig.apiKey` at rest using
+   `AI_MODEL_ENCRYPTION_KEY` — that happens transparently via JPA, so as
+   long as the new client reads `config.getApiKey()` like the others do, it
+   gets this for free. Do not add your own encryption, and do not log the
+   key at any log level.
+6. Add a test alongside the existing provider-client tests
+   (`backend/src/test/java/.../translation/`) that mocks the HTTP call and
+   asserts request shape + response mapping, mirroring the existing
+   Anthropic/OpenAI-compatible test structure.
+7. Only touch the frontend if the new provider needs an admin-form field
+   Anthropic/OpenAI-compatible don't already have; if so, follow the
+   existing "AI Models" admin page pattern instead of adding a new one.
+
+When done, report: the new enum value, the new class's fully-qualified
+name, and which test file you added/extended. Do not report or repeat any
+API key value used in a manual test.
+EOF
+```
+
+Verify — inside `codex`, run `/skills`: `add-ai-provider` should be listed
+with just its one-line description, not the full body.
+
+## 5. Write the Subagent role
+
+A Subagent buys context isolation, not speed: its own context is thrown
+away once it reports back, so the parent thread only inherits a summary,
+not every file it read. This one is a read-only investigator for a broad
+question — how secrets flow through this repo.
+
+```bash
+mkdir -p .codex/agents
+cat > .codex/agents/secret-auditor.toml <<'EOF'
+# IMPORTANT (verified against codex-rs source, core/src/agent/role.rs): only
+# a whitelist of fields set here reach the spawned agent — developer_
+# instructions, model, reasoning/personality/service_tier knobs, a
+# restricted skills view. sandbox_mode is NOT one of them: it parses
+# without error but is silently dropped, so this role does NOT run in an
+# OS-enforced read-only sandbox — it inherits the parent session's sandbox.
+# "Read-only" here is enforced by the instructions below only, not by a
+# Control — worth proving live in Demo 4 by asking it to write a file.
+
+name = "secret_auditor"
+description = "Read-only investigator for how secrets (APP_JWT_SECRET, AI_MODEL_ENCRYPTION_KEY, saved AI-model API keys) are generated, stored, encrypted, loaded, and possibly logged/exposed across the backend and frontend. Use for a broad, multi-file investigation instead of reading every candidate file from the main thread."
+
+developer_instructions = """
+You audit secret handling in a Spring Boot + React repo (EN Translator for IT).
+Known starting points — verify and extend, don't assume these are complete:
+ - backend/src/main/java/com/example/translator/aimodel/ApiKeyAttributeConverter.java
+   (AES-256-GCM encrypt/decrypt of the stored AI-model API key)
+ - backend/src/main/resources/application.yml, application-prod.yml, application-local.yml
+   (where APP_JWT_SECRET / AI_MODEL_ENCRYPTION_KEY are read from env)
+ - backend/src/main/java/com/example/translator/security/, .../auth/
+   (JWT signing/verification)
+ - .env.example, docker-compose.yml (how the two secrets reach the container)
+
+For every place a secret-bearing value is touched, report:
+ - file:line
+ - what happens there (generated / read from env / encrypted / decrypted /
+   returned in an API response / written to a log)
+ - whether the raw secret value could end up in a log line, HTTP response
+   body, or exception message
+
+You are read-only BY INSTRUCTION, not by sandbox enforcement — do not run
+any command or edit that writes to disk, regardless of what the sandbox
+would otherwise allow. Do not read node_modules/, target/, build/, or .git/.
+Do not print secret VALUES yourself (there shouldn't be any real ones in
+this repo, but treat it as a rule regardless). Return a compact table
+(file:line | what happens | risk note), not full file contents, so the
+parent thread doesn't inherit everything you read.
+"""
+EOF
+```
+
+Verify — this role is auto-discovered by filename under `.codex/agents/`,
+there's no separate registration step or list command:
+```bash
+test -f .codex/agents/secret-auditor.toml && echo ok
+```
+The real test is functional, in `03-demo-skills-vs-subagents.md`: ask Codex
+to delegate to `secret_auditor` and confirm the parent transcript only
+shows the delegation call + summary, not every file it read.
+
+## 6. Write the Hooks
+
+Exec policy (§7) matches static command *shapes*; Hooks are the general
+backstop — they see the full command string and can deny before execution
+(`PreToolUse`) or just observe after (`PostToolUse`).
+
+```bash
+mkdir -p .codex/hooks
+```
+
+**`block_secrets.py`** — denies any Bash command that references a real
+`.env` file (never `.env.example`), regardless of which program or exact
+path spelling was used — the general case the exec-policy prefix rule
+below can't cover:
+```bash
+cat > .codex/hooks/block_secrets.py <<'EOF'
+#!/usr/bin/env python3
+import json
+import re
+import sys
+
+ENV_FILE_PATTERN = re.compile(r"(^|[\s\"'/])\.env(?!\.example)\b")
+
+
+def main() -> int:
+    try:
+        event = json.load(sys.stdin)
+    except json.JSONDecodeError:
+        # Fail open on malformed input rather than blocking Codex entirely.
+        return 0
+
+    command = (event.get("tool_input") or {}).get("command", "")
+    if isinstance(command, list):
+        command = " ".join(str(part) for part in command)
+
+    if ENV_FILE_PATTERN.search(command or ""):
+        json.dump(
+            {
+                "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
+                    "permissionDecision": "deny",
+                    "permissionDecisionReason": (
+                        "Blocked by block_secrets.py: this command references a "
+                        ".env file, which holds plaintext secrets for this repo. "
+                        "If you need a specific value, ask a human to check it "
+                        "out of band instead of having Codex read/print the file."
+                    ),
+                }
+            },
+            sys.stdout,
+        )
+        return 0
+
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+EOF
+```
+
+**`audit_log.py`** — appends one line per tool call (timestamp, session id,
+tool, command) to `.codex/logs/audit.log`, a durable record independent of
+the transcript UI:
+```bash
+cat > .codex/hooks/audit_log.py <<'EOF'
+#!/usr/bin/env python3
+import json
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+LOG_PATH = Path(__file__).resolve().parents[1] / "logs" / "audit.log"
+
+
+def main() -> int:
+    try:
+        event = json.load(sys.stdin)
+    except json.JSONDecodeError:
+        return 0
+
+    session_id = event.get("session_id", "unknown-session")
+    tool_name = event.get("tool_name", "unknown-tool")
+    tool_input = event.get("tool_input") or {}
+    command = tool_input.get("command", "")
+    if isinstance(command, list):
+        command = " ".join(str(part) for part in command)
+
+    LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    line = (
+        f"{datetime.now(timezone.utc).isoformat()} "
+        f"session={session_id} tool={tool_name} command={command!r}\n"
+    )
+    with LOG_PATH.open("a", encoding="utf-8") as fh:
+        fh.write(line)
+
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+EOF
+chmod +x .codex/hooks/block_secrets.py .codex/hooks/audit_log.py
+```
+
+Now register both — `PreToolUse` matches `Bash` calls and can deny;
+`PostToolUse` matches every tool (`*`) including MCP calls, and runs
+`async` since it's just logging:
+```bash
+cat > .codex/hooks.json <<'EOF'
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .codex/hooks/block_secrets.py",
+            "timeout": 10,
+            "statusMessage": "Checking command against .env-file policy"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .codex/hooks/audit_log.py",
+            "timeout": 10,
+            "statusMessage": "Writing audit log entry",
+            "async": true
+          }
+        ]
+      }
+    ]
+  }
+}
+EOF
+```
+
+Verify each script standalone first, no Codex needed — this is the fastest
+way to catch a typo before wiring it into a live session:
+```bash
+echo '{"tool_name":"Bash","tool_input":{"command":"head -n5 .env"}}' \
+  | python3 .codex/hooks/block_secrets.py
+# expect: JSON with permissionDecision: "deny"
+
+echo '{"session_id":"demo","tool_name":"Bash","tool_input":{"command":"mvn test"}}' \
+  | python3 .codex/hooks/audit_log.py
+cat .codex/logs/audit.log
+# expect: one new line
+```
+Then inside `codex`, run `/hooks` and approve both — project-level,
+non-managed hooks require this one-time review before they're active for a
+session.
+
+## 7. Write the exec-policy rules
+
+Exec policy classifies a command's *shape* before it ever reaches
+`PreToolUse` or the sandbox — cheaper and earlier than a hook, but only as
+precise as the prefix you write (see the prefix-matching gap called out in
+`04-demo-exec-policy-hooks.md`, which is exactly why §6's hook exists too —
+defense in depth, not either/or).
+
+```bash
+mkdir -p .codex/rules
+cat > .codex/rules/default.rules <<'EOF'
+# Decisions, most restrictive wins when several rules match: forbidden > prompt > allow.
+# Validate any change with:
+#   codex execpolicy check --pretty --rules .codex/rules/default.rules -- <command...>
+
+# 1. Never let Codex print the root .env (APP_JWT_SECRET, AI_MODEL_ENCRYPTION_KEY
+#    live there in plaintext) straight into the transcript.
+#    NOTE: pattern matches an exact argument PREFIX — this only catches the
+#    literal command `cat .env`, not `cat ./.env`, `head .env`, etc. That gap
+#    is what the PreToolUse hook in .codex/hooks.json backstops.
+prefix_rule(
+    pattern = ["cat", ".env"],
+    decision = "forbidden",
+    justification = "Root .env holds APP_JWT_SECRET and AI_MODEL_ENCRYPTION_KEY in plaintext.",
+    match = ["cat .env"],
+    not_match = ["cat .env.example", "cat ./.env", "head .env"],
+)
+
+# 2. printenv can dump secrets that are only in the shell's environment
+#    (e.g. exported by docker compose), not in a file exec-policy can name.
+#    Ask instead of silently allowing or silently blocking.
+prefix_rule(
+    pattern = ["printenv"],
+    decision = "prompt",
+    justification = "printenv can leak APP_JWT_SECRET / AI_MODEL_ENCRYPTION_KEY / DB_PASSWORD from the environment.",
+    match = ["printenv", "printenv APP_JWT_SECRET"],
+)
+
+# 3. Pushing should always be a deliberate, approved action, even though
+#    workspace-write + on-request would otherwise let network-free git
+#    subcommands run without a prompt.
+prefix_rule(
+    pattern = ["git", "push"],
+    decision = "prompt",
+    justification = "A push is externally visible and hard to fully undo; always confirm.",
+    match = ["git push", "git push origin main"],
+)
+
+# 4. This wipes the translator-pgdata named volume — every saved user,
+#    note, and AI model config, gone. Never let it run unattended.
+prefix_rule(
+    pattern = ["docker", "compose", "down", "-v"],
+    decision = "forbidden",
+    justification = "Deletes the translator-pgdata volume; irreversible data loss.",
+    match = ["docker compose down -v"],
+)
+EOF
+```
+
+Verify directly, no live session needed:
+```bash
+codex execpolicy check --pretty --rules .codex/rules/default.rules -- cat .env
+codex execpolicy check --pretty --rules .codex/rules/default.rules -- git push origin main
+codex execpolicy check --pretty --rules .codex/rules/default.rules -- docker compose down -v
+# expect: forbidden, prompt, forbidden — in that order
+```
+
+## 8. (Optional but recommended) Write `AGENTS.md`
+
+Not a new mechanism — just always-loaded instructions, in context every
+turn without any invocation. The demos assume it's already in play, so add
+a short one describing the repo (see the version in `01-overview.md`'s
+"what's already in the repo" list for a template) — even a few lines
+pointing at where the translation pipeline and secrets live is enough for
+the demos to make sense.
+
+## 9. Self-check — confirm all five pieces actually work
 
 | Check | Command | Expect |
 |---|---|---|
-| Codex installed | `codex --version` | Prints a version (e.g. `codex-cli 0.154.0`) |
-| Logged in | `codex doctor` → `auth` line | Does **not** say "no Codex credentials were found" |
-| Config loads clean | `codex doctor` → "Configuration" section | `config.toml parse: ok`, `MCP servers: 1` |
-| Database up | `docker compose ps` (from repo root) | `translator-postgres` shows `running`/`healthy` |
-| MCP server registered | `codex mcp list` | `translator_db` row, `Status: enabled` |
+| Codex installed & logged in | `codex --version` / `codex doctor` → `auth` | Version prints; auth not "no credentials" |
+| Config loads clean | `codex doctor` → "Configuration" | `config.toml parse: ok`, `MCP servers: 1` |
+| Database up | `docker compose ps` | `translator-postgres` `running`/`healthy` |
+| **MCP** | `codex mcp list` | `translator_db`, `Status: enabled` |
+| **Skill** | inside `codex`, `/skills` | `add-ai-provider` listed |
+| **Subagent** | `test -f .codex/agents/secret-auditor.toml` | file exists (auto-discovered) |
+| **Hooks** | inside `codex`, `/hooks` | `block_secrets.py` + `audit_log.py` listed, approved |
+| **Exec policy** | `codex execpolicy check --pretty --rules .codex/rules/default.rules -- cat .env` | `forbidden` |
 
-If `codex doctor` instead prints an `Error loading config.toml: ...` line,
-don't debug it blind — that's a known failure shape covered directly in
-`.codex/config.toml`'s own top comment (a TOML table-scoping gotcha that
-bit an earlier version of this exact file); read that first.
+If `codex doctor` prints `Error loading config.toml: ...`, re-check the
+TOML-gotcha comment at the top of §3's snippet before debugging further —
+root keys after a `[table]` header silently become keys of that table.
 
 ## Troubleshooting
 
-- **`npm install -g` fails with `EACCES`/permission errors** (common on
-  macOS/Linux if Node was installed via the OS package manager as root):
-  switch to `nvm` (see step 1's Linux note; works on macOS too) instead of
-  fighting npm's global-install permissions — don't `sudo npm install -g`,
-  it causes more permission problems later.
-- **WSL2: `docker` not found inside Ubuntu** — Docker Desktop's WSL
-  integration toggle (step 1, Windows) needs your specific distro enabled
-  and Docker Desktop actually running on the Windows side; restart the
-  Ubuntu terminal after enabling it.
-- **Corporate network blocks `codex login`'s browser flow or `npm
-  install`** — try a personal hotspot for the pre-work if your office
-  network filters unfamiliar domains; if it's still blocked at home, that's
-  worth flagging to the organizer ahead of time, not discovering during the
-  session.
-- **Port 5432 already in use** (another local Postgres running) —
-  `docker compose up -d postgres` will fail to bind the port; either stop
-  the other Postgres, or add `SERVER_PORT`-style overrides / change the
-  `ports:` mapping in `docker-compose.yml` for your local copy only.
-- **`codex doctor` shows `reachability`/`websocket` failures** — those two
-  lines are about Codex's own connectivity check hitting your network; as
-  long as `auth` doesn't say "no credentials," and later a real `codex`
-  prompt actually gets a response, you're fine — some corporate proxies
-  fail the specific diagnostic probe without blocking real traffic.
+- **Trust prompt keeps reappearing** — it's tied to the exact local path;
+  a fresh clone or a different machine triggers it again, expected.
+- **`npm install -g` fails with `EACCES`** — use [nvm](https://github.com/nvm-sh/nvm)
+  instead of `sudo npm install -g`.
+- **WSL2: `docker` not found inside Ubuntu** — enable Docker Desktop's WSL
+  integration for your distro, restart the Ubuntu terminal.
+- **Port 5432 already in use** — stop the other local Postgres, or change
+  the `ports:` mapping in `docker-compose.yml` for your copy only.
+- **`codex mcp list` shows `translator_db` but queries fail** — check
+  `docker compose ps` first; almost always Postgres isn't actually up.
+- **Hook doesn't fire in a live session but the manual `echo | python3 ...`
+  test worked** — you likely skipped the `/hooks` approval step (§6); it's
+  required once per session for non-managed project hooks.
+- **`codex doctor` shows `reachability`/`websocket` failures** — as long as
+  `auth` doesn't say "no credentials" and a real prompt gets a response,
+  those two probes failing is usually just a corporate proxy, not a real
+  problem.
