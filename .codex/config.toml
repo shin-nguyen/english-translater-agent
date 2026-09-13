@@ -1,0 +1,46 @@
+# Project-scoped Codex config for the "EN Translator for IT" demo repo.
+#
+# This file only takes effect once you've trusted this project in Codex
+# (Codex asks the first time it opens an untrusted folder — see
+# demo-guides/00-overview.md). Everything here is scoped to this repo; it
+# does not touch your global ~/.codex/config.toml.
+#
+# TOML GOTCHA THAT BIT AN EARLIER VERSION OF THIS FILE: in TOML, every
+# key after a [table] header belongs to THAT table until the next header.
+# Root-level keys (sandbox_mode, approval_policy below) must be written
+# before the first [table] in the file — otherwise they silently become
+# keys of whatever table precedes them, and Codex fails with something like
+# `Error loading config.toml: invalid type: string "workspace-write",
+# expected struct AgentRoleToml in \`agents\`` (that exact error happens
+# because `[agents]` treats any key it doesn't recognize as the name of a
+# custom agent role). That's why the two root settings are first in this
+# file, before any `[section]`.
+
+sandbox_mode = "workspace-write"
+approval_policy = "on-request"
+
+[sandbox_workspace_write]
+network_access = false
+
+# ---------------------------------------------------------------------------
+# Demo 1 — MCP: a read-only Postgres MCP server pointed at the app's own DB.
+# Requires `docker compose up -d postgres` to be running first (see
+# demo-guides/01-demo-mcp.md).
+# ---------------------------------------------------------------------------
+[mcp_servers.translator_db]
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-postgres", "postgresql://translator:translator@localhost:5432/translator"]
+startup_timeout_sec = 15
+tool_timeout_sec = 30
+enabled = true
+
+# ---------------------------------------------------------------------------
+# Demo 2 — Subagents: cap how many can be open concurrently, so a runaway
+# fan-out doesn't happen live. (max_threads is an alias for the real field
+# max_concurrent_threads_per_session.) The secret_auditor role itself is
+# NOT declared here — it's auto-discovered from .codex/agents/secret-auditor.toml,
+# no [agents.secret_auditor] entry needed.
+# ---------------------------------------------------------------------------
+[agents]
+max_threads = 4
+max_depth = 1

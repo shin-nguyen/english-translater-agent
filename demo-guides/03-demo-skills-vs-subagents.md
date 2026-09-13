@@ -1,0 +1,123 @@
+# Demo 2 — Skills vs Subagents
+
+Covers outline §7. Prerequisite: `demo-guides/00-setup.md` and
+`01-overview.md` done.
+
+The point of this demo is NOT "look, Codex can do these two cool things."
+It's that Skills and Subagents solve *different* problems — reusable
+know-how vs. context isolation — and mixing them up leads to the wrong
+tool for the job. AGENTS.md is the third mechanism in the same family;
+it's already in play the whole workshop (this repo's root `AGENTS.md`),
+so this demo focuses on telling Skills and Subagents apart.
+
+## Part A — Skills: reusable, triggered workflow
+
+`.agents/skills/add-ai-provider/SKILL.md` encodes how *this specific repo*
+wants a new AI provider added (which interface to implement, where the
+registry lives, "reuse the existing encryption path, don't invent a new
+one"). It only costs context when it's actually relevant — Codex loads just
+the `name` + `description` frontmatter for every skill up front, and only
+pulls in the full body once it picks this one (outline: "progressive
+disclosure").
+
+1. List what Codex currently sees:
+   ```
+   /skills
+   ```
+   Confirm `add-ai-provider` is listed with just its one-line description —
+   not its full contents.
+2. Trigger it **implicitly** — don't name the skill, just describe the task:
+   > I want to add Google Gemini as a new AI provider option in this app,
+   > using its native API (not the OpenAI-compatible path).
+
+   Watch for Codex indicating it's using the `add-ai-provider` skill before
+   it starts. If it does, it should follow the skill's steps in order:
+   read `AiProviderClient` + the two existing implementations first, add
+   `GEMINI` to `AiProviderType`, create `GeminiProviderClient` as a
+   `@Component`, reuse `ApiKeyAttributeConverter` rather than inventing new
+   encryption, add a test next to the existing provider-client tests.
+3. Trigger it **explicitly** instead, to contrast:
+   ```
+   $add-ai-provider
+   ```
+   (or whatever your Codex build's explicit-invocation syntax is — check
+   `/skills` help) and note that the outcome should be the same either way;
+   only *how* it got selected differs.
+
+This is what "Skills" are for per the outline: specialized, reusable
+knowledge/workflow, loaded when relevant, not per-conversation improvised.
+
+## Part B — Subagents: context isolation for a broad investigation
+
+`.codex/agents/secret-auditor.toml` defines `secret_auditor`: an investigator
+whose job is to trace every place `APP_JWT_SECRET`, `AI_MODEL_ENCRYPTION_KEY`,
+and stored AI-model API keys get touched across the backend. That's a
+*broad*, multi-file question — exactly the shape of task the outline says
+subagents are for, not because it's slower or faster, but because of what
+ends up in whose context.
+
+One thing to flag as you introduce it: the file's `developer_instructions`
+tell it to be read-only, but — verified against Codex's own source
+(`core/src/agent/role.rs`) — a role file's `sandbox_mode` is silently
+dropped rather than applied; only `developer_instructions`, `model`, and a
+handful of other fields actually reach the spawned agent. So `secret_auditor`
+is read-only **by instruction, not by sandbox enforcement** — it inherits
+whatever sandbox the parent session is using. Hold that thought for Demo 4:
+it's a real, concrete example of something that looks like a Control but is
+actually only an Instruction.
+
+**Run 1 — no delegation (do it "by hand" in the main thread):**
+
+1. Start a fresh Codex session in the repo (`codex`, fresh — not continuing
+   from Part A).
+2. Prompt:
+   > Investigate how APP_JWT_SECRET, AI_MODEL_ENCRYPTION_KEY, and saved AI
+   > model API keys are generated, stored, encrypted, and could possibly be
+   > exposed (logs, API responses, exceptions), across this whole repo.
+   > Read whatever files you need yourself and give me a report.
+3. Let it finish. Look at the transcript itself (this needs no special
+   command — it's the plainest, most reliable evidence): count how many
+   distinct files got opened/quoted along the way (config YAMLs,
+   `ApiKeyAttributeConverter.java`, the security/auth package,
+   `docker-compose.yml`, etc.). All of that is now sitting in the main
+   thread's history, whether or not the final report needed to quote all of
+   it — and it stays there, taking up budget, for the rest of the session.
+
+**Run 2 — delegate to the subagent:**
+
+1. Start another fresh Codex session.
+2. Prompt:
+   > Delegate an investigation of how this repo generates, stores,
+   > encrypts, and might expose APP_JWT_SECRET, AI_MODEL_ENCRYPTION_KEY,
+   > and saved AI model API keys to the `secret_auditor` subagent. Just
+   > give me its summary.
+3. Let it finish. Look at the parent thread's transcript the same way: it
+   should show the delegation call and `secret_auditor`'s final compact
+   table, but not the full text of every file the subagent opened to
+   produce that table — that reading happened in the subagent's own,
+   separate context, which is discarded once it reports back.
+4. Compare the two transcripts side by side: Run 1's main-thread history has
+   every file it read; Run 2's has only the delegation + the summary. Same
+   underlying investigation, very different footprint left in the parent.
+
+That's "context isolation is the main value, not automatically speed"
+(outline §7) made concrete: Run 2 probably isn't faster (spinning up a
+subagent has its own overhead), but the parent's context stays clean enough
+to keep working on something else afterward, while Run 1's doesn't.
+
+## Triggering mechanisms — side by side
+
+| Mechanism | How it's invoked | What the parent context gets |
+|---|---|---|
+| AGENTS.md | Always loaded, no invocation | Its full text, every turn (this repo's `AGENTS.md` has been in context since session start) |
+| Skill | Model-matched (implicit) or `$name` (explicit) | Just the description until selected, then the full `SKILL.md` body |
+| Subagent | Explicit ask, or model decides parallelization helps | Only the subagent's final report — its working context is thrown away |
+
+## When each is the wrong tool
+
+- Don't write a Skill for something that's really just "always relevant" —
+  that belongs in `AGENTS.md`.
+- Don't reach for a Subagent for a one-file lookup — the spin-up overhead
+  and lost shared context isn't worth it for something the main thread could
+  just read in one step. Save it for genuinely broad, "read a lot to answer
+  one question" work like the secret audit above.

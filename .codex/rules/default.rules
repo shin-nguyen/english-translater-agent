@@ -1,0 +1,52 @@
+# Exec-policy rules for the "EN Translator for IT" demo repo.
+#
+# Decisions, most restrictive wins when several rules match: forbidden > prompt > allow.
+# Validate any change with:
+#   codex execpolicy check --pretty --rules .codex/rules/default.rules -- <command...>
+#
+# NOTE for the demo: `pattern` matches an exact argument PREFIX. That is a
+# deliberate, visible limitation here — see demo-guides/03-demo-exec-policy-hooks.md,
+# step "the prefix-matching gap". It is why rule #1 below only catches the
+# literal command `cat .env` and NOT `cat ./.env`, `head .env`, `tail -f .env`,
+# or `cat ../.env` from a subdirectory — same file, different exact argument
+# string. The PreToolUse hook in .codex/hooks.json is the more general
+# backstop for exactly that gap.
+
+# 1. Never let Codex print the root .env (APP_JWT_SECRET, AI_MODEL_ENCRYPTION_KEY
+#    live there in plaintext) straight into the transcript.
+prefix_rule(
+    pattern = ["cat", ".env"],
+    decision = "forbidden",
+    justification = "Root .env holds APP_JWT_SECRET and AI_MODEL_ENCRYPTION_KEY in plaintext.",
+    match = ["cat .env"],
+    not_match = ["cat .env.example", "cat ./.env", "head .env"],
+)
+
+# 2. printenv can dump secrets that are only in the shell's environment
+#    (e.g. exported by docker compose), not in a file exec-policy can name.
+#    Ask instead of silently allowing or silently blocking.
+prefix_rule(
+    pattern = ["printenv"],
+    decision = "prompt",
+    justification = "printenv can leak APP_JWT_SECRET / AI_MODEL_ENCRYPTION_KEY / DB_PASSWORD from the environment.",
+    match = ["printenv", "printenv APP_JWT_SECRET"],
+)
+
+# 3. Pushing should always be a deliberate, approved action, even though
+#    workspace-write + on-request would otherwise let network-free git
+#    subcommands run without a prompt.
+prefix_rule(
+    pattern = ["git", "push"],
+    decision = "prompt",
+    justification = "A push is externally visible and hard to fully undo; always confirm.",
+    match = ["git push", "git push origin main"],
+)
+
+# 4. This wipes the translator-pgdata named volume — every saved user,
+#    note, and AI model config, gone. Never let it run unattended.
+prefix_rule(
+    pattern = ["docker", "compose", "down", "-v"],
+    decision = "forbidden",
+    justification = "Deletes the translator-pgdata volume; irreversible data loss.",
+    match = ["docker compose down -v"],
+)
