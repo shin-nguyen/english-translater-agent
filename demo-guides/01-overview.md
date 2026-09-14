@@ -10,6 +10,7 @@ the course outline, in order:
 | 7 | Skills vs Subagents | `03-demo-skills-vs-subagents.md` | Yes |
 | 8 | Execution Governance — Exec Policy & Hooks | `04-demo-exec-policy-hooks.md` | Yes |
 | 9 | Putting Everything Together | `05-demo-putting-together.md` | Design worksheet, not a scripted demo — same as the outline itself, which gives #9 no "Demo:" bullet |
+| bonus | A full Skill+Subagents+MCP+Hooks workflow | `06-demo-ticket-workflow.md` | Yes — needs its own Jira Cloud pre-work, see that file |
 
 Every config file the demos reference already exists in this checkout —
 nobody needs to type TOML/JSON live. Presenter and attendees both just run
@@ -33,6 +34,13 @@ codex mcp list               # translator_db, Status: enabled
 ```
 If any of those look wrong, go back to `00-setup.md`'s self-check table
 rather than debugging from scratch here.
+
+## Bonus demo needs its own setup
+
+`06-demo-ticket-workflow.md` is not covered by `00-setup.md` — it needs a
+real Jira Cloud site, which can't be bundled the way the other demos'
+local Postgres is. Read that file's own pre-work section before presenting
+it; skip it entirely if a Jira site isn't available.
 
 ## What's already in the repo
 

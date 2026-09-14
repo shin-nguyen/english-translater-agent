@@ -1,0 +1,4 @@
+tickets/
+.worktrees/
+.codex/tickets_active
+.codex/config.toml.bak

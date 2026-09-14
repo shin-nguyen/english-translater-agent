@@ -1,0 +1,8 @@
+[features]
+rmcp_client = true
+
+[mcp_servers.atlassian]
+url = "https://mcp.atlassian.com/v2/mcp"
+startup_timeout_sec = 15
+tool_timeout_sec = 30
+enabled = true

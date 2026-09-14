@@ -1,2 +1,4 @@
 .env
 .codex/logs/
+.superpowers/
+__pycache__/
