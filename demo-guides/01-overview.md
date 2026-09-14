@@ -79,5 +79,5 @@ self-contained and can run in ~15–20 minutes.
   wipes the DB volume — which is also exactly the command Demo 3 teaches
   exec-policy to forbid. Comment out that rule temporarily, or just
   `docker compose down -v && docker compose up -d postgres` and re-run
-  `00-setup.md` step 4's schema-loading command, if you need to reset
+  `00-setup.md` §1's schema-loading command, if you need to reset
   outside the workshop.

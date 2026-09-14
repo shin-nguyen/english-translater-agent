@@ -95,21 +95,45 @@ visible in Codex's own source (`rmcp-client`'s stdio launcher spawns the
 MCP server with a plain `Command::new(...)`, no sandbox, vs. the shell
 tool's exec path, which always goes through a sandboxing wrapper).
 
+Prove it with a **filesystem write**, not a network connection — see
+`00-setup.md`'s "Known limitation" note for why: on native Windows, Codex's
+"block network" enforcement is frequently a no-op (either nothing is
+applied at all, or it's only an env-var hint that a tool opening a raw
+socket, like `psql`, simply ignores), so a network-based version of this
+step can silently pass when it should fail. A file write is checked by the
+OS's own permission system on every platform Codex runs on — that's the
+version to actually put in front of an audience.
+
 ### 4a — prove it without needing a live Codex turn at all
 
 `codex sandbox` runs one command under a given sandbox config directly —
-no model, no auth needed, so this works even before anyone's logged in:
+no model, no auth needed, so this works even before anyone's logged in.
+Use whichever form matches where you're actually running (mixing them up
+matters here — see the note below):
+
+Inside WSL2, or on macOS/Linux:
 ```bash
-codex sandbox -c sandbox_mode='"read-only"' -- \
-  psql -h localhost -U translator -d translator -c "select count(*) from roles;"
+codex sandbox -c 'sandbox_mode="read-only"' -- sh -c 'echo test > ./sandbox_write_test.txt'
 ```
-Expect this to fail (`read-only` has no network access, and a TCP
-connection to Postgres on `localhost:5432` counts). Compare with the MCP
-server, run exactly the way Codex itself runs it — as a plain subprocess,
-no sandbox wrapper at all — answering the identical query successfully (see
-`demo-guides/00-setup.md`'s verification, or just watch Demo 1 Step 2
-succeed while this command fails). Same database, same credentials, same
-question — only one path is inside Codex's execution boundary.
+On native Windows (PowerShell/cmd, not WSL2):
+```powershell
+codex sandbox -c 'sandbox_mode="read-only"' -- cmd.exe /c "echo test > sandbox_write_test.txt"
+```
+Expect this to fail — `Permission denied` (bash) or `Access is denied.`
+(cmd) — no file created either way (confirmed on both: exit code 1,
+`sandbox_write_test.txt` never appears; `Remove-Item`/`rm` it if a prior
+attempt did create one). `read-only` means exactly that; the shell tool's
+exec path always goes through the OS-level sandbox wrapper, on every
+platform, unlike the network case above.
+
+One Windows-specific gotcha, in case you hit it while adapting this: the
+Windows form must use `cmd.exe` (or a full path to `sh.exe`), not a bare
+`sh` — `codex sandbox` spawns the child directly via
+`CreateProcessAsUserW`, which (unlike a normal shell) does **not** search
+`PATH` for an unqualified name, so a bare `sh` fails with "the system
+cannot find the file specified" before the sandbox even gets a chance to
+allow or deny anything. `cmd.exe` always resolves because
+`C:\Windows\System32` is searched unconditionally.
 
 ### 4b — see it with an actual session
 
@@ -118,17 +142,19 @@ question — only one path is inside Codex's execution boundary.
    sandbox_mode = "read-only"
    ```
    Restart `codex` in the repo.
-2. Ask Codex to hit Postgres **directly**, via a normal shell command:
-   > Run `psql -h localhost -U translator -d translator -c "select count(*) from roles;"` in the shell.
+2. Ask Codex to write a file directly, via a normal shell command:
+   > Run `echo test > ./sandbox_write_test.txt` in the shell.
 
-   Expect this to be blocked or need explicit approval, for the same reason
-   as 4a.
-3. Now ask the same question through MCP instead:
+   Expect this to be blocked or need explicit approval, for the same
+   permission-denied reason as 4a.
+3. Now ask Codex to repeat Step 2's query, through MCP instead:
    > Using the `translator_db` MCP tool, run `select count(*) from roles;`
 
-   Expect this to succeed, with no sandbox denial — the `translator_db`
-   process was already spawned as configured, and Codex's shell sandbox
-   never sat between it and Postgres.
+   Expect this to succeed, with no sandbox denial at all —
+   `sandbox_mode = "read-only"` never touched this process. The
+   `translator_db` server was spawned once, outside Codex's sandbox wrapper
+   entirely, the moment it started; tightening the *shell* sandbox
+   afterward doesn't retroactively apply to it.
 4. Set `sandbox_mode` back to `"workspace-write"` when you're done.
 
 Say the quiet part out loud here: an MCP server is a trusted program with

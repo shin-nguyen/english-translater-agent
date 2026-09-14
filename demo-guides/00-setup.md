@@ -508,6 +508,53 @@ If `codex doctor` prints `Error loading config.toml: ...`, re-check the
 TOML-gotcha comment at the top of §3's snippet before debugging further —
 root keys after a `[table]` header silently become keys of that table.
 
+## Known limitation — Codex's sandbox and network access on native Windows
+
+Verified on a real Windows 11 machine, not inferred: `sandbox_mode =
+"read-only"` does **not** reliably block a raw network connection (e.g.
+`psql -h localhost`) when Codex runs natively on Windows (PowerShell/cmd,
+outside WSL2). This is why §0 says WSL2, and why `02-demo-mcp.md`'s Step 4
+demo uses a **filesystem write**, not a network call, to show the sandbox
+boundary — that part is enforced reliably on every platform.
+
+Codex's Windows network enforcement has three levels, and only the last
+one is a real OS-level barrier:
+
+1. **Disabled** — no `[windows] sandbox` / `features.windows_sandbox*` set
+   (the state of this kit's plain `.codex/config.toml`) → nothing is
+   enforced at all. A tool like `psql` just connects.
+2. **Unelevated (restricted token)** — "no network" is implemented as
+   environment-variable hints only (`HTTP_PROXY`/`HTTPS_PROXY`/`ALL_PROXY`
+   pointed at a dead address, `NPM_CONFIG_OFFLINE`, `CARGO_NET_OFFLINE`,
+   `PIP_NO_INDEX`, a stubbed `ssh`/`scp`, deleted `curl.bat`/`wget.cmd`).
+   Any tool that opens a raw socket directly instead of reading a proxy env
+   var — `psql` via libpq included — ignores all of it and connects anyway.
+3. **Elevated** — runs under a dedicated sandboxed Windows user with
+   firewall rules bound to that user's SID; this is real enforcement, but
+   even here loopback (`localhost`/`127.0.0.1`) is explicitly exempted
+   (`allow_local_binding`), so a connection to Postgres on `localhost:5432`
+   still isn't blocked. Only a handful of specific ports/protocols (DNS 53,
+   DoT 853, SMB 139/445, ICMP) are blocked outright.
+
+Check which level you're on before trusting any network-based sandbox demo:
+```bash
+# any output here (e.g. "1 http://127.0.0.1:9") = level 2 (env-only, still
+# bypassable); no output at all = level 1 (disabled)
+codex sandbox -c 'sandbox_mode="read-only"' -- cmd /c set | findstr "SBX_NONET_ACTIVE HTTP_PROXY"
+```
+```powershell
+# any rows here = level 3 (elevated, real firewall enforcement)
+Get-NetFirewallRule -DisplayName "Codex Sandbox Offline*"
+```
+Filesystem writes don't have this problem — they're checked by the OS's
+own permission system at every level, which is why `02-demo-mcp.md`'s
+trust-boundary demo is built around a blocked file write instead. If you
+specifically want to demo the *network* case, do it inside a real WSL2
+distro (`wsl --install -d Ubuntu` — not the internal `docker-desktop`
+distro Docker Desktop manages, which has no dev tools and isn't meant for
+this) or on macOS/Linux, where enforcement goes through
+seccomp/Landlock/sandbox-exec instead of this Windows-specific path.
+
 ## Troubleshooting
 
 - **Trust prompt keeps reappearing** — it's tied to the exact local path;

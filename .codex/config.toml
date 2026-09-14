@@ -2,7 +2,7 @@
 #
 # This file only takes effect once you've trusted this project in Codex
 # (Codex asks the first time it opens an untrusted folder — see
-# demo-guides/00-overview.md). Everything here is scoped to this repo; it
+# demo-guides/01-overview.md). Everything here is scoped to this repo; it
 # does not touch your global ~/.codex/config.toml.
 #
 # TOML GOTCHA THAT BIT AN EARLIER VERSION OF THIS FILE: in TOML, every
@@ -25,7 +25,7 @@ network_access = false
 # ---------------------------------------------------------------------------
 # Demo 1 — MCP: a read-only Postgres MCP server pointed at the app's own DB.
 # Requires `docker compose up -d postgres` to be running first (see
-# demo-guides/01-demo-mcp.md).
+# demo-guides/02-demo-mcp.md).
 # ---------------------------------------------------------------------------
 [mcp_servers.translator_db]
 command = "npx"
